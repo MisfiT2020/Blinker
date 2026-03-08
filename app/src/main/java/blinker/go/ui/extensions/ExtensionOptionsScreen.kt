@@ -1,7 +1,9 @@
 package blinker.go.ui.extensions
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.view.ViewGroup
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -21,7 +23,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
+import blinker.go.data.extension.ExtensionInjector
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,11 +45,41 @@ fun ExtensionOptionsScreen(
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
+                databaseEnabled = true
                 allowFileAccess = true
                 allowContentAccess = true
+                @Suppress("DEPRECATION")
+                allowFileAccessFromFileURLs = true
+                @Suppress("DEPRECATION")
+                allowUniversalAccessFromFileURLs = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
             }
-            webViewClient = WebViewClient()
+
+            webViewClient = object : WebViewClient() {
+                override fun onPageStarted(
+                    view: WebView?, url: String?, favicon: Bitmap?
+                ) {
+                    view?.let { ExtensionInjector.injectApiShim(it) }
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    view?.let { ExtensionInjector.injectApiShim(it) }
+                }
+            }
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(
+                    message: android.webkit.ConsoleMessage?
+                ): Boolean {
+                    return true
+                }
+            }
+
             loadUrl(optionsUrl)
         }
     }
@@ -65,7 +99,8 @@ fun ExtensionOptionsScreen(
                 title = {
                     Text(
                         text = "$extensionName Settings",
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {

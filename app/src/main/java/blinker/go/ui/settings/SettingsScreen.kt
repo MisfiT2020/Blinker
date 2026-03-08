@@ -92,7 +92,6 @@ fun SettingsScreen(
                 .padding(padding),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            // ── General ──
             item { SectionHeader("General") }
             item {
                 SettingItem(
@@ -111,7 +110,6 @@ fun SettingsScreen(
                 ) { showHomepage = true }
             }
 
-            // ── Appearance ──
             item { SectionHeader("Appearance") }
             item {
                 SettingItem(
@@ -121,7 +119,6 @@ fun SettingsScreen(
                 ) { showTheme = true }
             }
 
-            // ── Privacy & Security ──
             item { SectionHeader("Privacy & Security") }
             item {
                 SwitchSettingItem(
@@ -155,7 +152,6 @@ fun SettingsScreen(
                 ) { showClearData = true }
             }
 
-            // ── Downloads ──
             item { SectionHeader("Downloads") }
             item {
                 SettingItem(
@@ -172,7 +168,6 @@ fun SettingsScreen(
                 ) { showConcurrent = true }
             }
 
-            // ── About ──
             item { SectionHeader("About") }
             item {
                 SettingItem(
@@ -184,15 +179,25 @@ fun SettingsScreen(
         }
     }
 
-    // ── Dialogs ──
-
     if (showSearchEngine) {
+        val engines = SearchEngine.values()
+        val isHomepageLinked = engines.any { it.homeUrl == settings.homepageUrl }
+
         SingleChoiceDialog(
             title = "Search Engine",
-            options = SearchEngine.values().map { it.label },
-            selectedIndex = SearchEngine.values().indexOf(settings.searchEngine),
+            options = engines.map { it.label },
+            selectedIndex = engines.indexOf(settings.searchEngine),
             onSelect = { index ->
-                onSettingsChange(settings.copy(searchEngine = SearchEngine.values()[index]))
+                val newEngine = engines[index]
+                val newSettings = if (isHomepageLinked) {
+                    settings.copy(
+                        searchEngine = newEngine,
+                        homepageUrl = newEngine.homeUrl
+                    )
+                } else {
+                    settings.copy(searchEngine = newEngine)
+                }
+                onSettingsChange(newSettings)
                 showSearchEngine = false
             },
             onDismiss = { showSearchEngine = false }
@@ -273,8 +278,6 @@ fun SettingsScreen(
     }
 }
 
-// ── Helper Composables ──
-
 @Composable
 private fun SectionHeader(title: String) {
     Text(
@@ -307,10 +310,7 @@ private fun SettingItem(
         )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
@@ -345,10 +345,7 @@ private fun SwitchSettingItem(
         )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,

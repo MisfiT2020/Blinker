@@ -118,6 +118,11 @@ private fun createConfiguredWebView(
                 tab.isLoading = true
                 tab.canGoBack = view?.canGoBack() ?: false
                 tab.canGoForward = view?.canGoForward() ?: false
+
+                // Inject document_start extensions
+                if (view != null && url?.startsWith("http") == true) {
+                    ExtensionInjector.injectAtStart(view, url, extensionManager)
+                }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -135,6 +140,7 @@ private fun createConfiguredWebView(
                     onPageLoaded(finalUrl, finalTitle)
                 }
 
+                // Inject document_idle/document_end extensions
                 if (view != null && finalUrl.startsWith("http")) {
                     ExtensionInjector.inject(view, finalUrl, extensionManager)
                 }
@@ -217,9 +223,11 @@ fun BrowserScreen(
     var showExtensions by remember { mutableStateOf(false) }
     var extensionList by remember { mutableStateOf(emptyList<ExtensionInfo>()) }
 
-    // Extension options screen state
     var optionsExt by remember { mutableStateOf<ExtensionInfo?>(null) }
     var optionsUrl by remember { mutableStateOf<String?>(null) }
+
+    // Track previous homeUrl to detect changes
+    var lastHomeUrl by remember { mutableStateOf(homeUrl) }
 
     val bookmarkManager = remember { BookmarkManager(context) }
     val historyManager = remember { HistoryManager(context) }
@@ -248,6 +256,14 @@ fun BrowserScreen(
                     Toast.LENGTH_SHORT
                 ).show()
             }
+        }
+    }
+
+    // When homepage changes in settings, navigate active tab
+    LaunchedEffect(homeUrl) {
+        if (homeUrl != lastHomeUrl) {
+            lastHomeUrl = homeUrl
+            webViews[activeTabId]?.loadUrl(homeUrl)
         }
     }
 
@@ -352,7 +368,7 @@ fun BrowserScreen(
         }
     }
 
-    // ── Extension Options Screen ──
+    // Extension Options Screen
     if (optionsExt != null && optionsUrl != null) {
         ExtensionOptionsScreen(
             extensionName = optionsExt!!.name,
@@ -377,8 +393,6 @@ fun BrowserScreen(
             else -> webViews[activeTabId]?.goBack()
         }
     }
-
-    // ── Sheets & Dialogs ──
 
     if (showMenu) {
         MenuSheet(
@@ -476,8 +490,6 @@ fun BrowserScreen(
             }
         )
     }
-
-    // ── Main UI ──
 
     if (showTabSwitcher) {
         TabSwitcher(

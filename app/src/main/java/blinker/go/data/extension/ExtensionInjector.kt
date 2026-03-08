@@ -23,6 +23,7 @@ object ExtensionInjector {
         append("remove:function(k,c){if(typeof k==='string')k=[k];")
         append("k.forEach(function(x){delete _s[x];});")
         append("if(c)c();return Promise.resolve();}};")
+        append("if(!chrome.storage.sync)chrome.storage.sync=chrome.storage.local;")
         append("if(!chrome.runtime)chrome.runtime={};")
         append("if(!chrome.runtime.sendMessage)chrome.runtime.sendMessage=")
         append("function(m,c){if(c)c();return Promise.resolve();};")
@@ -31,18 +32,28 @@ object ExtensionInjector {
         append("hasListener:function(){return false;}};")
         append("if(!chrome.runtime.getURL)chrome.runtime.getURL=function(p){return p;};")
         append("if(!chrome.runtime.id)chrome.runtime.id='blinker-ext';")
+        append("if(!chrome.runtime.getManifest)chrome.runtime.getManifest=function(){return {};};")
+        append("if(!chrome.runtime.onInstalled)chrome.runtime.onInstalled={addListener:function(c){c({reason:'install'});}};")
         append("if(!chrome.i18n)chrome.i18n={getMessage:function(m){return m;}};")
+        append("if(!chrome.tabs)chrome.tabs={query:function(q,c){if(c)c([]);return Promise.resolve([]);}};")
+        append("if(!chrome.extension)chrome.extension={getURL:function(p){return p;}};")
         append("if(typeof browser==='undefined')window.browser=chrome;")
         append("})();")
     }
 
-    fun inject(webView: WebView, url: String, manager: ExtensionManager) {
+    /**
+     * Inject at document_start (called from onPageStarted)
+     */
+    fun injectAtStart(webView: WebView, url: String, manager: ExtensionManager) {
         val matches = manager.getContentScriptsForUrl(url)
-        if (matches.isEmpty()) return
+        val startScripts = matches.filter { (_, cs) ->
+            cs.runAt == "document_start"
+        }
+        if (startScripts.isEmpty()) return
 
         webView.evaluateJavascript(API_SHIM, null)
 
-        matches.forEach { (ext, cs) ->
+        startScripts.forEach { (ext, cs) ->
             cs.css.forEach { path ->
                 manager.readFile(ext.id, path)?.let { css ->
                     injectCss(webView, css)
@@ -54,6 +65,39 @@ object ExtensionInjector {
                 }
             }
         }
+    }
+
+    /**
+     * Inject at document_end and document_idle (called from onPageFinished)
+     */
+    fun inject(webView: WebView, url: String, manager: ExtensionManager) {
+        val matches = manager.getContentScriptsForUrl(url)
+        val scripts = matches.filter { (_, cs) ->
+            cs.runAt != "document_start"
+        }
+        if (scripts.isEmpty()) return
+
+        webView.evaluateJavascript(API_SHIM, null)
+
+        scripts.forEach { (ext, cs) ->
+            cs.css.forEach { path ->
+                manager.readFile(ext.id, path)?.let { css ->
+                    injectCss(webView, css)
+                }
+            }
+            cs.js.forEach { path ->
+                manager.readFile(ext.id, path)?.let { js ->
+                    injectJs(webView, js)
+                }
+            }
+        }
+    }
+
+    /**
+     * Inject API shim only (for options pages)
+     */
+    fun injectApiShim(webView: WebView) {
+        webView.evaluateJavascript(API_SHIM, null)
     }
 
     private fun injectCss(webView: WebView, css: String) {
@@ -69,7 +113,7 @@ object ExtensionInjector {
     }
 
     private fun injectJs(webView: WebView, js: String) {
-        val wrapped = "(function(){try{\n" + js + "\n}catch(e){console.error('Blinker ext error:',e);}})()"
+        val wrapped = "(function(){try{\n$js\n}catch(e){console.error('Blinker ext error:',e);}})()"
         webView.evaluateJavascript(wrapped, null)
     }
 }
