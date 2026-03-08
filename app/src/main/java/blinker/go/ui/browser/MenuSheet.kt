@@ -11,11 +11,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DesktopWindows
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,11 +38,16 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun MenuSheet(
     isDesktopMode: Boolean,
+    isBookmarked: Boolean,
     onDismiss: () -> Unit,
     onNewTab: () -> Unit,
+    onToggleBookmark: () -> Unit,
+    onBookmarks: () -> Unit,
+    onHistory: () -> Unit,
     onShare: () -> Unit,
     onFindInPage: () -> Unit,
     onDesktopMode: () -> Unit,
+    onDownloads: () -> Unit,
     onCloseAllTabs: () -> Unit
 ) {
     ModalBottomSheet(
@@ -50,35 +60,57 @@ fun MenuSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         ) {
-            MenuItem(
-                icon = Icons.Rounded.Add,
-                text = "New Tab"
-            ) { onNewTab(); onDismiss() }
+            MenuItem(Icons.Rounded.Add, "New Tab") {
+                onDismiss(); onNewTab()
+            }
 
             MenuItem(
-                icon = Icons.Rounded.Share,
-                text = "Share"
-            ) { onShare(); onDismiss() }
+                icon = if (isBookmarked) Icons.Rounded.Bookmark
+                       else Icons.Rounded.BookmarkBorder,
+                text = if (isBookmarked) "Remove Bookmark"
+                       else "Add Bookmark"
+            ) {
+                onDismiss(); onToggleBookmark()
+            }
 
-            MenuItem(
-                icon = Icons.Rounded.Search,
-                text = "Find in Page"
-            ) { onFindInPage(); onDismiss() }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            MenuItem(Icons.Rounded.Star, "Bookmarks") {
+                onDismiss(); onBookmarks()
+            }
+
+            MenuItem(Icons.Rounded.History, "History") {
+                onDismiss(); onHistory()
+            }
+
+            MenuItem(Icons.Rounded.Download, "Downloads") {
+                onDismiss(); onDownloads()
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            MenuItem(Icons.Rounded.Share, "Share") {
+                onDismiss(); onShare()
+            }
+
+            MenuItem(Icons.Rounded.Search, "Find in Page") {
+                onDismiss(); onFindInPage()
+            }
 
             MenuItem(
                 icon = if (isDesktopMode) Icons.Rounded.PhoneAndroid
                        else Icons.Rounded.DesktopWindows,
-                text = if (isDesktopMode) "Mobile Site" else "Desktop Site"
-            ) { onDesktopMode(); onDismiss() }
+                text = if (isDesktopMode) "Mobile Site"
+                       else "Desktop Site"
+            ) {
+                onDismiss(); onDesktopMode()
+            }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            MenuItem(
-                icon = Icons.Rounded.Close,
-                text = "Close All Tabs"
-            ) { onCloseAllTabs(); onDismiss() }
+            MenuItem(Icons.Rounded.Close, "Close All Tabs") {
+                onDismiss(); onCloseAllTabs()
+            }
         }
     }
 }
