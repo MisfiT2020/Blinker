@@ -18,6 +18,8 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -39,6 +41,10 @@ import blinker.go.data.Bookmark
 import blinker.go.data.BookmarkManager
 import blinker.go.data.HistoryEntry
 import blinker.go.data.HistoryManager
+import blinker.go.data.extension.ExtensionInfo
+import blinker.go.data.extension.ExtensionInjector
+import blinker.go.data.extension.ExtensionManager
+import blinker.go.ui.extensions.ExtensionsSheet
 
 private const val DESKTOP_UA =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -64,9 +70,7 @@ private fun captureWebViewThumbnail(webView: WebView): Bitmap? {
         canvas.scale(scale, scale)
         webView.draw(canvas)
         bitmap
-    } catch (_: Exception) {
-        null
-    }
+    } catch (_: Exception) { null }
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -75,6 +79,7 @@ private fun createConfiguredWebView(
     tab: TabInfo,
     isDesktopMode: Boolean,
     appSettings: BlinkerSettings,
+    extensionManager: ExtensionManager,
     onFindResult: (Int, Int) -> Unit,
     onPageLoaded: (String, String) -> Unit
 ): WebView {
@@ -128,6 +133,10 @@ private fun createConfiguredWebView(
                 if (finalUrl.startsWith("http://") || finalUrl.startsWith("https://")) {
                     onPageLoaded(finalUrl, finalTitle)
                 }
+
+                if (view != null && finalUrl.startsWith("http")) {
+                    ExtensionInjector.inject(view, finalUrl, extensionManager)
+                }
             }
 
             override fun shouldOverrideUrlLoading(
@@ -166,9 +175,11 @@ private fun createConfiguredWebView(
                         Environment.DIRECTORY_DOWNLOADS, fileName
                     )
                 }
-                val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val dm = context.getSystemService(Context.DOWNLOAD_SERVICE)
+                    as DownloadManager
                 dm.enqueue(request)
-                Toast.makeText(context, "Downloading: $fileName", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Downloading: $fileName", Toast.LENGTH_SHORT)
+                    .show()
             } catch (_: Exception) {
                 Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
             }
@@ -202,11 +213,36 @@ fun BrowserScreen(
     var bookmarkList by remember { mutableStateOf(emptyList<Bookmark>()) }
     var historyList by remember { mutableStateOf(emptyList<HistoryEntry>()) }
 
+    var showExtensions by remember { mutableStateOf(false) }
+    var extensionList by remember { mutableStateOf(emptyList<ExtensionInfo>()) }
+
     val bookmarkManager = remember { BookmarkManager(context) }
     val historyManager = remember { HistoryManager(context) }
+    val extensionManager = remember { ExtensionManager(context) }
 
     val webViews = remember { mutableMapOf<String, WebView>() }
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.first()
+
+    val extPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            val result = extensionManager.install(it)
+            if (result != null) {
+                Toast.makeText(
+                    context,
+                    "Installed: ${result.name}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                Toast.makeText(
+                    context,
+                    "Invalid extension file",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
 
     LaunchedEffect(activeTab.url) {
         isBookmarked = bookmarkManager.isBookmarked(activeTab.url)
@@ -215,7 +251,8 @@ fun BrowserScreen(
     LaunchedEffect(settings.javaScriptEnabled, settings.blockPopups) {
         webViews.values.forEach { wv ->
             wv.settings.javaScriptEnabled = settings.javaScriptEnabled
-            wv.settings.javaScriptCanOpenWindowsAutomatically = !settings.blockPopups
+            wv.settings.javaScriptCanOpenWindowsAutomatically =
+                !settings.blockPopups
         }
     }
 
@@ -228,7 +265,8 @@ fun BrowserScreen(
 
     fun captureThumbnail(tabId: String) {
         webViews[tabId]?.let { wv ->
-            tabs.find { it.id == tabId }?.thumbnail = captureWebViewThumbnail(wv)
+            tabs.find { it.id == tabId }?.thumbnail =
+                captureWebViewThumbnail(wv)
         }
     }
 
@@ -279,7 +317,8 @@ fun BrowserScreen(
     fun toggleDesktopMode() {
         isDesktopMode = !isDesktopMode
         webViews.forEach { (_, wv) ->
-            wv.settings.userAgentString = if (isDesktopMode) DESKTOP_UA else null
+            wv.settings.userAgentString =
+                if (isDesktopMode) DESKTOP_UA else null
         }
         webViews[activeTabId]?.reload()
     }
@@ -297,13 +336,18 @@ fun BrowserScreen(
 
     fun openDownloads() {
         try {
-            context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
+            context.startActivity(
+                Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
+            )
         } catch (_: Exception) {
-            Toast.makeText(context, "Cannot open Downloads", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Cannot open Downloads", Toast.LENGTH_SHORT)
+                .show()
         }
     }
 
-    BackHandler(enabled = showTabSwitcher || showFindInPage || activeTab.canGoBack) {
+    BackHandler(
+        enabled = showTabSwitcher || showFindInPage || activeTab.canGoBack
+    ) {
         when {
             showFindInPage -> {
                 showFindInPage = false
@@ -313,6 +357,8 @@ fun BrowserScreen(
             else -> webViews[activeTabId]?.goBack()
         }
     }
+
+    // ── Sheets & Dialogs ──
 
     if (showMenu) {
         MenuSheet(
@@ -333,6 +379,10 @@ fun BrowserScreen(
             onFindInPage = { showFindInPage = true },
             onDesktopMode = { toggleDesktopMode() },
             onDownloads = { openDownloads() },
+            onExtensions = {
+                extensionList = extensionManager.getAll()
+                showExtensions = true
+            },
             onSettings = { onOpenSettings() },
             onCloseAllTabs = { closeAllTabs() }
         )
@@ -369,6 +419,27 @@ fun BrowserScreen(
         )
     }
 
+    if (showExtensions) {
+        ExtensionsSheet(
+            extensions = extensionList,
+            onDismiss = { showExtensions = false },
+            onToggle = { id, enabled ->
+                extensionManager.setEnabled(id, enabled)
+                extensionList = extensionManager.getAll()
+            },
+            onDelete = { id ->
+                extensionManager.uninstall(id)
+                extensionList = extensionManager.getAll()
+            },
+            onInstall = {
+                showExtensions = false
+                extPickerLauncher.launch(arrayOf("*/*"))
+            }
+        )
+    }
+
+    // ── Main UI ──
+
     if (showTabSwitcher) {
         TabSwitcher(
             tabs = tabs,
@@ -393,8 +464,12 @@ fun BrowserScreen(
                                 findTotalMatches = 0
                             }
                         },
-                        onNext = { webViews[activeTabId]?.findNext(true) },
-                        onPrevious = { webViews[activeTabId]?.findNext(false) },
+                        onNext = {
+                            webViews[activeTabId]?.findNext(true)
+                        },
+                        onPrevious = {
+                            webViews[activeTabId]?.findNext(false)
+                        },
                         onDismiss = {
                             showFindInPage = false
                             webViews[activeTabId]?.clearMatches()
@@ -416,8 +491,11 @@ fun BrowserScreen(
                             )
                         },
                         onRefreshOrStop = {
-                            if (activeTab.isLoading) webViews[activeTabId]?.stopLoading()
-                            else webViews[activeTabId]?.reload()
+                            if (activeTab.isLoading) {
+                                webViews[activeTabId]?.stopLoading()
+                            } else {
+                                webViews[activeTabId]?.reload()
+                            }
                         }
                     )
                 }
@@ -445,10 +523,13 @@ fun BrowserScreen(
                 factory = { ctx -> FrameLayout(ctx) },
                 update = { container ->
                     container.removeAllViews()
-                    val currentTab = tabs.find { it.id == activeTabId } ?: tabs.first()
+                    val currentTab = tabs.find {
+                        it.id == activeTabId
+                    } ?: tabs.first()
                     val webView = webViews.getOrPut(activeTabId) {
                         createConfiguredWebView(
                             context, currentTab, isDesktopMode, settings,
+                            extensionManager,
                             onFindResult = { active, total ->
                                 findActiveMatch = active
                                 findTotalMatches = total

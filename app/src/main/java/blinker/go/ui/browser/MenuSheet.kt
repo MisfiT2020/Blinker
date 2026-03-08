@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DesktopWindows
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Search
@@ -49,6 +50,7 @@ fun MenuSheet(
     onFindInPage: () -> Unit,
     onDesktopMode: () -> Unit,
     onDownloads: () -> Unit,
+    onExtensions: () -> Unit,
     onSettings: () -> Unit,
     onCloseAllTabs: () -> Unit
 ) {
@@ -82,6 +84,9 @@ fun MenuSheet(
             }
             MenuItem(Icons.Rounded.Download, "Downloads") {
                 onDismiss(); onDownloads()
+            }
+            MenuItem(Icons.Rounded.Extension, "Extensions") {
+                onDismiss(); onExtensions()
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
